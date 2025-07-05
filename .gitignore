@@ -1,0 +1,25 @@
+# Dependencies - Ignores any and all node_modules folders
+node_modules/
+
+# Production build folders
+/build
+/dist
+
+# Test reports
+/coverage
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables (DO NOT COMMIT THESE)
+.env
+.env.local
+
+# Editor-specific settings
+.vscode/
+.idea/
+
+# macOS specific
+.DS_Store
