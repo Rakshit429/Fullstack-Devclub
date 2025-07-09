@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { useAuth } from './context/AuthContext';
 
 // This component now manages its own state for the forms.
 export default function AuthForms() {
@@ -13,6 +13,7 @@ export default function AuthForms() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const { login , register } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -32,21 +33,25 @@ export default function AuthForms() {
       ? { email: formData.email, password: formData.password }
       : formData;
 
-    try {
-      const response = await axios.post(`http://localhost:5000${endpoint}`, payload);
-      setLoading(false);
-
-      if (isLoginView) {
-        setSuccess('Login successful! Reloading...');
-        localStorage.setItem('userInfo', JSON.stringify(response.data));
-        window.location.reload(); // Reload to trigger the main App component's state change
-      } else {
+    if (isLoginView) {
+      try {
+        await login(formData.email, formData.password);
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to log in.');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      try {
+        await register(formData.username, formData.email, formData.password);
         setSuccess('Registration successful! Please log in.');
         setIsLoginView(true);
+      } catch (err) {
+        console.error('Registration error:', err);
+        setError(err.response?.data?.message || 'Failed to register.');
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setLoading(false);
-      setError(err.response?.data?.message || 'An unexpected error occurred.');
     }
   };
 

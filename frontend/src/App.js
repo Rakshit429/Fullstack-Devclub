@@ -1,34 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import AuthForms from './AuthForms'; // Import the new component
-import MainApplication from './MainApplication'; // Import the new component
+import React from 'react';
+import { useAuth } from './context/AuthContext'; // Import the custom hook
+import AuthForms from './AuthForms';
+import MainApplication from './MainApplication';
 import './App.css';
 
 function App() {
-  const [userInfo, setUserInfo] = useState(null);
-
-  useEffect(() => {
-    const storedUserInfo = localStorage.getItem('userInfo');
-    if (storedUserInfo) {
-      setUserInfo(JSON.parse(storedUserInfo));
-    }
-  }, []);
-
-	const handleLogout = () => {
-    localStorage.removeItem('userInfo');
-    setUserInfo(null);
-  };
-
-	const handleProfileUpdate = (newUserInfo) => {
-    localStorage.setItem('userInfo', JSON.stringify(newUserInfo));
-    setUserInfo(newUserInfo);
-  };
+  // Get the mongoUser directly from our global context!
+  const { mongoUser } = useAuth();
   return (
     <div className="App">
-      {userInfo ? (
-        <MainApplication userInfo={userInfo} onLogout={handleLogout} onProfileUpdate = {handleProfileUpdate} />
-      ) : (
-        <AuthForms />
-      )}
+      {mongoUser ? <MainApplication /> : <AuthForms />}
     </div>
   );
 }
