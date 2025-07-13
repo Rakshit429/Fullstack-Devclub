@@ -90,7 +90,7 @@ if (process.env.NODE_ENV === 'production') {
 
   // 2. For any route that is not an API route, send the index.html file.
   // This must be the LAST route defined.
-  app.get('*', (req, res) => {
+  app.get('/*', (req, res) => {
     res.sendFile(path.join(buildPath, 'index.html'));
   });
 }
