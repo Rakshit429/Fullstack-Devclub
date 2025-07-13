@@ -97,6 +97,8 @@ if (process.env.NODE_ENV === 'production') {
 
 // --- SERVER LISTENER ---
 const PORT = process.env.PORT || 5000;
+const listEndpoints = require('express-list-endpoints');
+console.log('🚀 ROUTES:', listEndpoints(app));
 app.listen(PORT, () => {
   console.log(`✅ Backend server is running on port: ${PORT}`);
 });
