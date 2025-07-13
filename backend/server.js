@@ -78,8 +78,8 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   res.status(200).json({ filePath: fileUrl });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/calls', callRoutes);
+// app.use('/api/auth', authRoutes);
+// app.use('/api/calls', callRoutes);
 
 // --- **FIX 2: Production Static File Serving** ---
 // This entire block should only run in the production environment on Render.
