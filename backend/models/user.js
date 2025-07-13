@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs'); 
+const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema(
   {
     username: {
@@ -12,12 +12,17 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Email is required'],
       lowercase: true,
       unique: [true, 'Email is already registered'],
-      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email'], 
+      match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email'],
     },
     password: {
       type: String,
       required: [true, 'Password is required'],
-      minlength: [6, 'Password must be at least 6 characters long'], 
+      minlength: [6, 'Password must be at least 6 characters long'],
+    },
+    firebaseUid: {
+      type: String,
+      required: true,
+      unique: true,
     },
   },
   {

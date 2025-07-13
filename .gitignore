@@ -15,6 +15,7 @@ yarn-error.log*
 
 # Environment variables (DO NOT COMMIT THESE)
 .env
+firebase-service-account-key.json
 .env.local
 
 # Editor-specific settings

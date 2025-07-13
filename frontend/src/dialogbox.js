@@ -1,134 +1,277 @@
-import React, { useState, useEffect, useRef } from 'react';
-// Import all the necessary Firebase functions
+// client/src/dialogbox.js
+import axios from 'axios';
+import { useState, useEffect, useRef } from 'react';
 import { database } from './firebase';
-import { ref, onValue, push, set, serverTimestamp } from 'firebase/database';
+import { ref as dbRef, onValue, push, set, serverTimestamp, update, increment } from 'firebase/database';
 import { useAuth } from './context/AuthContext';
-import ChatNavbar from './chatnavbar'; 
+import ChatNavbar from './chatnavbar';
+import DOMPurify from 'dompurify';
+import publicApi from './utils/public'
 
-export default function DialogBox({ selectedChat }) {
-    const { firebaseUser , mongoUser } = useAuth(); // Get our logged-in Firebase user
-    const [messages, setMessages] = useState([]); // State to hold the conversation messages
-    const [newMessage, setNewMessage] = useState(''); // State for the input box
 
-    // Create a ref to an invisible div at the bottom of the chat list
-    // We will use this to automatically scroll down when new messages arrive
+export default function DialogBox({ selectedChat, onShowChatList }) {
+    const { firebaseUser, mongoUser } = useAuth();
+    const [messages, setMessages] = useState([]);
+    const [newMessage, setNewMessage] = useState('');
+    //State for file uploads ---
+    const [file, setFile] = useState(null); // Holds the selected file
+    const [uploadProgress, setUploadProgress] = useState(0); // Holds upload progress percentage
+    const [isUploading, setIsUploading] = useState(false); // Tracks if an upload is in progress
+    const fileInputRef = useRef(null); // Ref to access the hidden file input
+    // ---
+
     const messagesEndRef = useRef(null);
 
-    // This useEffect hook handles auto-scrolling
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]); // It runs every time the 'messages' array changes
+    }, [messages]);
 
-    // This useEffect hook loads the chat history for the selected user
     useEffect(() => {
-        // Don't run if we haven't selected a chat or don't know who we are
         if (!selectedChat || !firebaseUser) return;
 
-        // 1. Create a reference to the entire /Chats collection
-        const chatsRef = ref(database, 'Chats');
+        const chatRoomId = [firebaseUser.uid, selectedChat.uid].sort().join('-');
+        const chatsRef = dbRef(database, `Chats/${chatRoomId}`);
 
-        // 2. Set up the live listener with onValue
         const unsubscribe = onValue(chatsRef, (snapshot) => {
-            const allMessages = snapshot.val();
-            if (allMessages) {
-                // 3. Filter the messages
-                const conversation = Object.values(allMessages).filter(
-                    (msg) =>
-                        (msg.sender === firebaseUser.uid && msg.receiver === selectedChat.uid) ||
-                        (msg.sender === selectedChat.uid && msg.receiver === firebaseUser.uid)
-                );
-
-                // 4. Sort the messages by timestamp
-                conversation.sort((a, b) => a.timestamp - b.timestamp);
-
-                // 5. Update the state to display the messages
-                setMessages(conversation);
+            if (snapshot.exists()) {
+                const messagesData = snapshot.val();
+                const loadedMessages = Object.keys(messagesData).map(key => ({
+                    id: key, // The unique key from Firebase is our message ID
+                    ...messagesData[key] // The rest of the message data
+                }));
+                loadedMessages.sort((a, b) => a.timestamp - b.timestamp);
+                setMessages(loadedMessages);
             } else {
-                setMessages([]); // If no messages exist at all, ensure our state is an empty array
+                setMessages([]);
             }
         });
 
-        // Cleanup: When the component unmounts or we select a new chat, cancel this subscription
         return () => unsubscribe();
-    }, [selectedChat, firebaseUser]); // Re-run this ENTIRE effect if we click a different user
+    }, [selectedChat, firebaseUser]);
 
 
-    // This function handles sending a new message
+    //Function to handle when a user selects a file ---
+    const handleFileChange = (e) => {
+        if (e.target.files[0]) {
+            setFile(e.target.files[0]);
+        }
+    };
+
     const handleSendMessage = async (e) => {
         e.preventDefault();
-        if (newMessage.trim() === '' || !selectedChat) return;
-        console.log("reciver",selectedChat);
-        const newChatRef = push(ref(database, 'Chats'));
-        const messageData = {
-            message: newMessage,
-            sender: firebaseUser.uid,
-            receiver: selectedChat.uid,
-            timestamp: serverTimestamp(),
-        };
+        if ((newMessage.trim() === '' && !file) || !selectedChat) return;
+        const chatRoomId = [firebaseUser.uid, selectedChat.uid].sort().join('-');
+        const chatListRefSender = dbRef(database, `Chatlist/${firebaseUser.uid}/${selectedChat.uid}`);
+        const chatListRefReceiver = dbRef(database, `Chatlist/${selectedChat.uid}/${firebaseUser.uid}`);
 
-        // 1. Save the new message
-        await set(newChatRef, messageData);
+        // --- FILE UPLOAD LOGIC (Now using your own backend) ---
+        if (file) {
+            setIsUploading(true);
+            setUploadProgress(0);
 
-        // --- NEW: Update the Chatlist for both users ---
-        // 2. Create a reference for the sender's chatlist
-        const senderChatlistRef = ref(database, `Chatlist/${firebaseUser.uid}/${selectedChat.uid}`);
-        // 3. Create a reference for the receiver's chatlist
-        const receiverChatlistRef = ref(database, `Chatlist/${selectedChat.uid}/${firebaseUser.uid}`);
+            // 1. Create a FormData object to send the file
+            const formData = new FormData();
+            formData.append('file', file); // The key 'file' must match `upload.single('file')` on the backend
 
-        // 4. Update both chatlists with the latest message info
-        const chatlistData = {
-            uid: selectedChat.uid,
-            username: selectedChat.username, // Store partner's username for easy access
-            lastMessage: newMessage,
-            timestamp: serverTimestamp(),
-        };
-        await set(senderChatlistRef, chatlistData);
+            try {
+                //`onUploadProgress` to track and display upload percentage.
+                const response = await axios.post('/api/upload', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (progressEvent) => {
+                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                        setUploadProgress(percentCompleted);
+                    },
+                });
 
-        // Update the receiver's chatlist with the sender's info
-        const senderInfoForReceiver = {
-            uid: firebaseUser.uid,
-            username: mongoUser.username, // The current user's name
-            lastMessage: newMessage,
-            timestamp: serverTimestamp(),
-        };
-        await set(receiverChatlistRef, senderInfoForReceiver);
+                // 3. Get the file URL from your backend's response
+                const downloadURL = response.data.filePath;
 
+                // 4. Create the message object for Firebase Realtime Database
+                const messageData = {
+                    message: newMessage,
+                    sender: firebaseUser.uid,
+                    receiver: selectedChat.uid,
+                    timestamp: serverTimestamp(),
+                    messageType: 'image',
+                    mediaUrl: downloadURL, // <-- Use the URL from your backend
+                    fileName: file.name
+                };
 
-        setNewMessage(''); // Clear the input field
+                const newMessageRef = push(dbRef(database, `Chats/${chatRoomId}`));
+                await set(newMessageRef, messageData);
+
+                // Update chat list for both users
+                const lastMessage = `📷 Image ${newMessage ? `(${newMessage})` : ''}`;
+                await set(chatListRefSender, { uid: selectedChat.uid, username: selectedChat.username, lastMessage, timestamp: serverTimestamp() });
+                await update(chatListRefReceiver, {
+                    uid: firebaseUser.uid,
+                    username: mongoUser.username,
+                    email: mongoUser.email, 
+                    lastMessage,
+                    timestamp: serverTimestamp(),
+                    unreadCount: increment(1) // <-- ADD THIS LINE
+                });
+                // 5. Reset the state
+                setFile(null);
+                setNewMessage('');
+
+            } catch (error) {
+                console.error("Error uploading file:", error);
+                alert("File upload failed. Please try again.");
+            } finally {
+                setIsUploading(false); // Make sure to stop the loading state
+            }
+
+        } else {
+            // --- TEXT MESSAGE LOGIC (This part remains unchanged) ---
+            const messageData = {
+                message: newMessage,
+                sender: firebaseUser.uid,
+                receiver: selectedChat.uid,
+                timestamp: serverTimestamp(),
+                messageType: 'text',
+            };
+
+            const newMessageRef = push(dbRef(database, `Chats/${chatRoomId}`));
+            await set(newMessageRef, messageData);
+
+            // Update chat list for both users
+            await set(chatListRefSender, { uid: selectedChat.uid, username: selectedChat.username, lastMessage: newMessage, timestamp: serverTimestamp() });
+            await update(chatListRefReceiver, {
+                uid: firebaseUser.uid,
+                username: mongoUser.username,
+                email: mongoUser.email,
+                lastMessage: newMessage,
+                timestamp: serverTimestamp(),
+                unreadCount: increment(1) // <-- ADD THIS LINE
+            });
+            setNewMessage('');
+        }
     };
-    // If no user is selected, show a placeholder message
+
+    const handleTranslate = async (messageId, text) => {
+        setMessages(currentMessages =>
+            currentMessages.map(m =>
+                m.id === messageId ? { ...m, translatedText: 'Translating...' } : m
+            )
+        );
+
+        try {
+            // Use the new 'publicApi' instance for the call
+            console.log("Translating text:", text);
+            const response = await publicApi.get(`/get?q=${encodeURIComponent(text)}&langpair=auto|en`);
+            console.log("Translation response:", response.data);
+            let translatedText = 'Translation not found.';
+            if (response.data && response.data.responseData) {
+                const result = response.data.responseData.translatedText;
+                if (result && result.toLowerCase() !== text.toLowerCase()) {
+                    translatedText = result;
+                }
+            }
+
+            setMessages(currentMessages =>
+                currentMessages.map(m =>
+                    m.id === messageId ? { ...m, translatedText: translatedText } : m
+                )
+            );
+
+        } catch (error) {
+            console.error("Translation failed:", error);
+            setMessages(currentMessages =>
+                currentMessages.map(m =>
+                    m.id === messageId ? { ...m, translatedText: 'Translation failed' } : m
+                )
+            );
+        }
+    };
+
+    const renderMessageContent = (msg) => {
+        // console.log("Rendering message:", msg);
+        const showTranslateButton = msg.sender !== firebaseUser.uid && msg.messageType === 'text' && msg.message.trim() !== '' && !msg.translatedText;
+        return (
+            <div className="message-content">
+                {/* --- The part for rendering images is unchanged --- */}
+                {msg.messageType === 'image' && (
+                    <div className="media-message-container">
+                        <img src={msg.mediaUrl} alt={msg.fileName} className="chat-image" />
+                        <div className="media-info">
+                            {msg.message && (
+                                <p
+                                    className="caption"
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.message) }}
+                                ></p>
+                            )}
+                            <a href={msg.mediaUrl} download={msg.fileName || 'download'} target="_blank" rel="noopener noreferrer" className="download-btn">⬇️</a>
+                        </div>
+                    </div>
+                )}
+                {/* ---Display the text--- */}
+                {/* {console.log(DOMPurify.sanitize(msg.message))} */}
+                {msg.messageType !== 'image' && (
+                    <p dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.message || "") }}></p>
+                )}
+                {/* --- Display the translation if it exists --- */}
+                {msg.translatedText && <p className="translated-text">{msg.translatedText}</p>}
+
+                {/* --- The Translate Button --- */}
+                {showTranslateButton && (
+                    <button onClick={() => handleTranslate(msg, msg.message)} className="translate-btn">
+                        Translate
+                    </button>
+                )}
+            </div>
+        );
+    };
+
     if (!selectedChat) {
         return <div className="dialog-box-placeholder">Select a user to start chatting</div>;
     }
 
     return (
         <>
-        <ChatNavbar selectedChat={selectedChat} /> 
-        <div className="dialog-box">
-            <div className="chat-window">
-                {/* Loop through the messages in state and display each one */}
-                {messages.map((msg, index) => (
-                    <div
-                        key={index}
-                        // Conditionally apply a class for styling our messages vs their messages
-                        className={msg.sender === firebaseUser.uid ? 'message sent' : 'message received'}
-                    >
-                        <p>{msg.message}</p>
+            <ChatNavbar selectedChat={selectedChat} onShowChatList={onShowChatList} />
+            <div className="dialog-box">
+                <div className="chat-window">
+                    {messages.map((msg, index) => (
+                        <div key={index} className={msg.sender === firebaseUser.uid ? 'message sent' : 'message received'}>
+                            {renderMessageContent(msg)} {/* <-- Use the new render function */}
+                        </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+
+                {/* --- NEW: UI for file preview and upload progress --- */}
+                {isUploading && (
+                    <div className="upload-progress-bar">
+                        <div style={{ width: `${uploadProgress}%` }}></div>
                     </div>
-                ))}
-                {/* This is the invisible div that we scroll to */}
-                <div ref={messagesEndRef} />
+                )}
+                {file && !isUploading && (
+                    <div className="file-preview">
+                        <span>Selected: {file.name}</span>
+                        <button onClick={() => setFile(null)}>X</button>
+                    </div>
+                )}
+
+                {/* --- UPDATED: The message input form --- */}
+                <form onSubmit={handleSendMessage} className="message-input">
+                    {/* Hidden file input, triggered by the button */}
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept="image/*" />
+                    <button type="button" className="attach-btn" onClick={() => fileInputRef.current.click()}>
+                        📎
+                    </button>
+                    <input
+                        type="text"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder={file ? "Add a caption..." : "Type your message..."}
+                        disabled={isUploading}
+                    />
+                    <button type="submit" disabled={isUploading}>
+                        {isUploading ? '↺' : '⮞'}
+                    </button>
+                </form>
             </div>
-            <form onSubmit={handleSendMessage} className="message-input">
-                <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
-                />
-                <button type="submit">Send</button>
-            </form>
-        </div>
         </>
     );
 }

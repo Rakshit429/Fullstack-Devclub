@@ -4,12 +4,14 @@ const User = require('../models/user');
 const jwt = require('jsonwebtoken');
 const Joi = require('joi');
 const { protect } = require('../middleware/authMiddleware');
+const admin = require('firebase-admin');
 
 // Joi schemas and generateToken function are fine, no changes needed here.
 const userschema = Joi.object({
     username: Joi.string().required(),
-    password: Joi.string().pattern(new RegExp('^[a-zA-Z0-9]{3,30}$')).required(),
+    password: Joi.string().required(),
     email: Joi.string().email({ minDomainSegments: 2 }).required(),
+    firebaseUid: Joi.string().required()
 });
 
 const loginSchema = Joi.object({
@@ -23,19 +25,21 @@ const generateToken = (id) => {
     });
 };
 
-// --- FIXES START HERE ---
+const cookieOptions = {
+    httpOnly: true, // The cookie is not accessible via client-side JS
+    secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
+    sameSite: 'strict', // Helps mitigate CSRF attacks
+    maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+};
 
-// CHANGE 1: Use 'router', not 'app'.
-// CHANGE 2: The path is now relative, so it's '/register', not the full path.
 router.post('/register', async (req, res) => {
     try {
         const { error } = userschema.validate(req.body);
         if (error) {
             return res.status(400).send(error.details[0].message);
-            console.log(error.details[0].message);
         }
-        console.log('Request body:', req.body); // Debugging line to check the request body
-        const { username, email, password } = req.body;
+        const { username, email, password , firebaseUid } = req.body;
+        console.log('Registering user:', { username, email });
         const userExists = await User.findOne({ email });
         if (userExists) {
             console.log('User with this email already exists');
@@ -52,23 +56,23 @@ router.post('/register', async (req, res) => {
             username,
             email,
             password,
+            firebaseUid,
         });
         if (user) {
             res.status(201).json({
                 _id: user._id,
                 username: user.username,
                 email: user.email,
-                token: generateToken(user._id),
             });
         } else {
             res.status(400).json({ message: 'Invalid user data' });
-            console.log('Invalid user data');
         }
     } catch (error) {
         console.error('Error during registration:', error);
         res.status(500).json({ message: 'Server Error' });
     }
 });
+
 
 // Use 'router' and relative path '/login'
 router.post('/login', async (req, res) => {
@@ -83,11 +87,12 @@ router.post('/login', async (req, res) => {
         const user = await User.findOne({ email });
 
         if (user && (await user.matchPassword(password))) {
+            const token = generateToken(user._id);
+            res.cookie('token', token, cookieOptions);
             res.status(200).json({
                 _id: user._id,
                 username: user.username,
                 email: user.email,
-                token: generateToken(user._id),
             });
         } else {
             res.status(401).json({ message: 'Invalid email or password' });
@@ -98,6 +103,15 @@ router.post('/login', async (req, res) => {
     }
 });
 
+router.post('/logout', (req, res) => {
+    // To log out, we clear the cookie
+    res.cookie('token', '', {
+        httpOnly: true,
+        expires: new Date(0) // Set expiry date to the past
+    });
+    res.status(200).json({ message: 'Logged out successfully' });
+});
+
 // Use 'router' and relative path '/profile'
 router.get('/profile', protect, (req, res) => {
     if (!req.user) {
@@ -106,29 +120,66 @@ router.get('/profile', protect, (req, res) => {
     res.status(200).json(req.user);
 });
 
-// Use 'router' and relative path '/profile'
+
 router.put('/profile', protect, async (req, res) => {
     try {
-        const user = await User.findById(req.user._id); // It's safer to re-fetch the user
+        const user = await User.findById(req.user._id);
+
         if (user) {
-            user.username = req.body.username || user.username;
-            user.email = req.body.email || user.email;
-            if (req.body.password) {
-                user.password = req.body.password;
+            const updates = {};
+            const firebaseAuthUpdates = {};
+
+            // --- Check for changes and prepare updates ---
+            if (req.body.username && req.body.username !== user.username) {
+                updates.username = req.body.username;
             }
+            if (req.body.email && req.body.email !== user.email) {
+                updates.email = req.body.email;
+                firebaseAuthUpdates.email = req.body.email;
+            }
+            if (req.body.password) {
+                updates.password = req.body.password;
+                firebaseAuthUpdates.password = req.body.password;
+            }
+            
+            // --- 1. Update Firebase Authentication (if needed) ---
+            if (Object.keys(firebaseAuthUpdates).length > 0) {
+                await admin.auth().updateUser(user.firebaseUid, firebaseAuthUpdates);
+            }
+
+            // --- 2. Update Firebase Realtime Database (if username changed) ---
+            if (updates.username) {
+                const db = admin.database();
+                const userStatusRef = db.ref(`/ChatUsers/Users/${user.firebaseUid}`);
+                await userStatusRef.update({ username: updates.username });
+            }
+
+            // --- 3. Update MongoDB ---
+            user.username = updates.username || user.username;
+            user.email = updates.email || user.email;
+            if (updates.password) {
+                user.password = updates.password;
+            }
+            
             const updatedUser = await user.save();
+
+            // --- 4. Respond to client ---
             res.status(200).json({
                 _id: updatedUser._id,
                 username: updatedUser.username,
                 email: updatedUser.email,
-                token: generateToken(updatedUser._id),
             });
+
         } else {
             res.status(404).json({ message: 'User not found' });
         }
     } catch (error) {
         console.error('Error updating profile:', error);
-        res.status(500).json({ message: 'Server Error' });
+        // Provide more specific error messages for Firebase errors
+        if (error.code === 'auth/email-already-exists') {
+            return res.status(400).json({ message: 'The email address is already in use by another account.' });
+        }
+        res.status(500).json({ message: 'Server Error during profile update.' });
     }
 });
 

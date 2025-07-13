@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { database } from './firebase'; // Import our Firebase database instance
 import { ref, onValue } from 'firebase/database'; // Import real-time functions
 import { useAuth } from './context/AuthContext';
+import DOMPurify from 'dompurify'; // Import DOMPurify for sanitizing HTML input
 
-export default function ChatNavbar({ selectedChat }) {
+export default function ChatNavbar({ selectedChat, onShowChatList }) {
     // State to hold the real-time status of the person we are chatting with
     const [partnerStatus, setPartnerStatus] = useState('offline');
     const { startCall } = useAuth();
@@ -44,17 +45,20 @@ export default function ChatNavbar({ selectedChat }) {
 
     return (
         <div className="chat-header">
+            <button className="back-btn" onClick={onShowChatList}>←</button>
             <div className="chat-header-profile">
-                <img src={`https://i.pravatar.cc/150?u=${selectedChat.email}`} alt="avatar" className="avatar" />
+                <img src={`https://i.pravatar.cc/150?u=${selectedChat.email || selectedChat.uid}`} alt="avatar" className="avatar" />
                 <div className="chat-header-info">
-                    <span className="chat-name">{selectedChat.username}</span>
+                    <span
+                        className="chat-name"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedChat?.username || "") }}
+                    ></span>
                     <span className="chat-status">{partnerStatus}</span>
                 </div>
             </div>
             <div className="chat-header-actions">
                 {/* We will add the video call button here later */}
-                <button onClick={handleStartCall} className="action-btn">📞</button>
-                <button className="action-btn">...</button>
+                <button onClick={handleStartCall} className="action-btn">call📞</button>
             </div>
         </div>
     );

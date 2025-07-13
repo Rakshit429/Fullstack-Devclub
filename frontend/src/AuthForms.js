@@ -1,87 +1,84 @@
 import React, { useState } from 'react';
 import { useAuth } from './context/AuthContext';
 
-// This component now manages its own state for the forms.
 export default function AuthForms() {
-  const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    password: '',
-  });
+    const [formData, setFormData] = useState({ username: '', email: '', password: '' });
+    const [isLoginView, setIsLoginView] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [success, setSuccess] = useState(null);
+    const { login, register } = useAuth();
 
-  const [isLoginView, setIsLoginView] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const { login , register } = useAuth();
+    const handleChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+    const clearMessages = () => {
+        setError(null);
+        setSuccess(null);
+    };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
+    const toggleView = () => {
+        setIsLoginView(!isLoginView);
+        clearMessages();
+    };
 
-    const endpoint = isLoginView ? '/api/auth/login' : '/api/auth/register';
-    const payload = isLoginView
-      ? { email: formData.email, password: formData.password }
-      : formData;
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        clearMessages();
 
-    if (isLoginView) {
-      try {
-        await login(formData.email, formData.password);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Failed to log in.');
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      try {
-        await register(formData.username, formData.email, formData.password);
-        setSuccess('Registration successful! Please log in.');
-        setIsLoginView(true);
-      } catch (err) {
-        console.error('Registration error:', err);
-        setError(err.response?.data?.message || 'Failed to register.');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
+        if (isLoginView) {
+            try {
+                await login(formData.email, formData.password);
+            } catch (err) {
+                setError(err.response?.data?.message || err.message || 'Failed to log in.');
+            } finally {
+                setLoading(false);
+            }
+        } else {
+            try {
+                await register(formData.username, formData.email, formData.password);
+                setSuccess('Registration successful! Please check your email for a verification link.');
+                setFormData({ username: '', email: '', password: '' });
+            } catch (err) {
+                setError(err.response?.data?.message || err.message || 'Failed to register.');
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
 
-  return (
-    <header className="App-header">
-      <h1>{isLoginView ? 'Login' : 'Register'}</h1>
-      <form onSubmit={handleSubmit}>
-        {!isLoginView && (
-          <div>
-            <label htmlFor="username">Username:</label>
-            <input type="text" id="username" name="username" value={formData.username} onChange={handleChange} required />
-          </div>
-        )}
-        <div>
-          <label htmlFor="email">Email:</label>
-          <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} required />
+    return (
+        <div className="auth-container">
+            <div className={`auth-box ${!isLoginView ? 'right-panel-active' : ''}`}>
+                <div className="auth-forms">
+                    <form onSubmit={handleSubmit}>
+                        <h1>{isLoginView ? 'Login' : 'Create Account'}</h1>
+                        
+                        {!isLoginView && (
+                            <input type="text" name="username" placeholder="Username" value={formData.username} onChange={handleChange} required />
+                        )}
+                        <input type="email" name="email" placeholder="Email" value={formData.email} onChange={handleChange} required />
+                        <input type="password" name="password" placeholder="Password" value={formData.password} onChange={handleChange} required />
+                        
+                        <button type="submit" disabled={loading}>
+                            {loading ? 'Processing...' : (isLoginView ? 'Login' : 'Register')}
+                        </button>
+
+                        {success && <p style={{ color: 'green', textAlign: 'center' }}>{success}</p>}
+                        {error && <p style={{ color: 'red', textAlign: 'center' }}>{error}</p>}
+
+                        <button type="button" className="auth-toggle-button" onClick={toggleView}>
+                            {isLoginView ? 'Need an account? Register' : 'Have an account? Login'}
+                        </button>
+                    </form>
+                </div>
+                <div className="auth-panel">
+                    <h1>Welcome Back!</h1>
+                    <p>Enter your personal details to start your journey with us.</p>
+                </div>
+            </div>
         </div>
-        <div>
-          <label htmlFor="password">Password:</label>
-          <input type="password" id="password" name="password" value={formData.password} onChange={handleChange} required />
-        </div>
-        <button type="submit" disabled={loading}>
-          {loading ? (isLoginView ? 'Logging in...' : 'Registering...') : (isLoginView ? 'Login' : 'Register')}
-        </button>
-      </form>
-      {success && <p style={{ color: 'green' }}>{success}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <button onClick={() => setIsLoginView(!isLoginView)}>
-        {isLoginView ? 'Need an account? Register' : 'Have an account? Login'}
-      </button>
-    </header>
-  );
+    );
 }

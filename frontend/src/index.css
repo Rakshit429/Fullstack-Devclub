@@ -1,13 +1,106 @@
+/* General App Styles */
 body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+  background-color: #FFF9E3; /* Lighter Sand for the main background */
+  overflow: hidden; /* Prevent scrolling on the main page */
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Auth Container - This is the main addition for the login/register page */
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f0f2f5; /* A neutral light grey background */
+}
+
+.auth-box {
+  display: flex;
+  width: 800px;
+  height: 550px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Panel for displaying information and animation */
+.auth-panel {
+  width: 50%;
+  padding: 40px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  background: linear-gradient(135deg, #00A9E0, #40C3F7); /* Gradient from our color palette */
+  transition: transform 0.6s ease-in-out;
+  z-index: 100;
+}
+
+/* Forms container */
+.auth-forms {
+  width: 50%;
+  padding: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: transform 0s ease-in-out;
+}
+
+.auth-forms form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.auth-forms h1 {
+  color: #282c34;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.auth-forms input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.auth-forms button[type="submit"] {
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background-color: #00A9E0;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.auth-forms button[type="submit"]:hover {
+  background-color: #008fbf;
+}
+
+.auth-toggle-button {
+  background: none;
+  border: none;
+  color: #00A9E0;
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-top: 15px;
+}
+
+/* Animation for switching between login and register */
+.auth-box.right-panel-active .auth-panel {
+  transform: translateX(-100%);
+}
+.auth-box.right-panel-active .auth-forms {
+  transform: translateX(100%);
 }
