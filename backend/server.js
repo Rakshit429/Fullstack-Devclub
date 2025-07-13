@@ -76,15 +76,12 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/calls', callRoutes);
 
-if (process.env.NODE_ENV === 'production') {
-  // 1. Set the build folder to be the static folder
-  app.use(express.static(path.join(__dirname, 'client/build')));
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'build')));
 
-  // 2. For any route that is not an API route, serve the index.html file
-  app.get('*', (req, res) => {
-    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'));
-  });
-}
+// For any route that is not an API route, serve the React app's index.html file
+app.get('*', (req, res) => {
+  res.sendFile(path.resolve(__dirname, '..', 'frontend', 'build', 'index.html'));
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
