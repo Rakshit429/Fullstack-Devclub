@@ -14,12 +14,12 @@ const admin = require('firebase-admin');
 // --- FIREBASE ADMIN INITIALIZATION ---
 let serviceAccount;
 if (process.env.NODE_ENV === 'production') {
-    if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-        throw new Error('The FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
-    }
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    throw new Error('The FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+  }
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
 } else {
-    serviceAccount = require('./config/firebase-service-account-key.json');
+  serviceAccount = require('./config/firebase-service-account-key.json');
 }
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -90,9 +90,14 @@ if (process.env.NODE_ENV === 'production') {
 
   // 2. For any route that is not an API route, send the index.html file.
   // This must be the LAST route defined.
-  app.get('/*', (req, res) => {
-    res.sendFile(path.join(buildPath, 'index.html'));
-  });
+  try {
+    console.log('✅ Trying fallback route registration');
+    app.get('/*', (req, res) => {
+      res.sendFile(path.join(buildPath, 'index.html'));
+    });
+  } catch (err) {
+    console.error('❌ Route error:', err);
+  }
 }
 
 // --- SERVER LISTENER ---
