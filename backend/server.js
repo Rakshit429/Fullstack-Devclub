@@ -10,8 +10,21 @@ const authRoutes = require('./routes/authRoutes');
 const callRoutes = require('./routes/callRoutes');
 // ---FIREBASE ADMIN INITIALIZATION ---
 const admin = require('firebase-admin');
-const serviceAccount = require('./config/firebase-service-account-key.json');
+let serviceAccount;
 
+// Check if we are in the production environment (on Render)
+if (process.env.NODE_ENV === 'production') {
+    // If so, parse the credentials from the environment variable we just created
+    if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        throw new Error('The FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+    }
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+} else {
+    // Otherwise (in local development), load from the local file
+    serviceAccount = require('./config/firebase-service-account-key.json');
+}
+
+// Initialize Firebase Admin with the correct credentials
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: process.env.REACT_APP_FIREBASE_DATABASE_URL 
